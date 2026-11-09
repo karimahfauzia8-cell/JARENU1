@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JARENU — Jalur Rempah Nusantara (3D Interactive Route)</title>
+    <!-- Tailwind CSS for UI Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Inter & Cinematic Serif -->
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #030712;
+            color: #f3f4f6;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            width: 100vw;
+        }
+        .font-cinzel {
+            font-family: 'Cinzel', serif;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #d97706;
+            border-radius: 3px;
+        }
+        /* Glassmorphism Styling */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(217, 119, 6, 0.3);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.25s ease;
+        }
+        .glass-card:hover {
+            border-color: #f59e0b;
+            background: rgba(45, 55, 72, 0.85);
+            transform: translateY(-2px);
+        }
+        /* 3D Label Markers */
+        .globe-label {
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform: translate(-50%, -100%);
+            white-space: nowrap;
+            pointer-events: auto;
+            cursor: pointer;
+            transition: opacity 0.3s ease, transform 0.2s ease;
+            z-index: 10;
+        }
+        .globe-label:hover {
+            transform: translate(-50%, -110%) scale(1.15);
+            z-index: 20;
+        }
+        .globe-label .badge {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            font-size: 11px;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+        /* Glow animations */
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.4); }
+            50% { box-shadow: 0 0 25px rgba(245, 158, 11, 0.8); }
+        }
+        .active-route-card {
+            border-color: #f59e0b !important;
+            animation: pulse-glow 3s infinite;
+        }
+        /* Error Modal Fallback */
+        #cdn-error {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: #090d16;
+            z-index: 99999;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            text-align: center;
+            padding: 2rem;
+        }
+    </style>
+
+    <!-- Three.js Library & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="relative flex flex-col h-screen w-screen overflow-hidden">
+
+    <!-- CDN Fallback Error Screen -->
+    <div id="cdn-error">
+        <i class="fa-solid fa-triangle-exclamation text-amber-500 text-6xl mb-4"></i>
+        <h2 class="text-2xl font-bold font-cinzel text-white mb-2">Gagal Memuat Library 3D</h2>
+        <p class="text-gray-300 max-w-md text-sm mb-6">Aplikasi membutuhkan koneksi internet untuk memuat library Three.js. Silakan periksa koneksi Anda lalu muat ulang halaman.</p>
+        <button onclick="location.reload()" class="bg-amber-600 hover:bg-amber-500 text-white font-semibold px-6 py-2.5 rounded-lg shadow-lg transition">Muat Ulang</button>
+    </div>
+
+    <!-- Canvas Container -->
+    <div id="canvas-container" class="absolute inset-0 w-full h-full z-0 cursor-grab active:cursor-grabbing"></div>
+
+    <!-- 2D Overlay Container for Dynamic Globe Labels -->
+    <div id="labels-container" class="absolute inset-0 pointer-events-none z-10 overflow-hidden"></div>
+
+    <!-- APP HEADER -->
+    <header class="relative z-20 flex items-center justify-between px-4 py-3 md:px-6 glass-panel border-b border-amber-950/40">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-600 to-yellow-400 flex items-center justify-center shadow-lg border border-yellow-200/50">
+                <i class="fa-solid fa-ship text-slate-950 text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-lg md:text-xl font-bold font-cinzel tracking-wider text-amber-400 leading-tight">JARENU</h1>
+                <p class="text-xs text-slate-300 hidden sm:block">Jalur Rempah Nusantara — Interactive 3D Simulation</p>
+            </div>
+        </div>
+
+        <!-- Quick Nav & Audio Controls -->
+        <div class="flex items-center space-x-2 md:space-x-3">
+            <button id="btn-focus-nusantara" class="bg-slate-800/90 hover:bg-amber-600/30 border border-amber-500/40 text-amber-300 text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition" title="Fokus Kamera ke Indonesia">
+                <i class="fa-solid fa-compass"></i>
+                <span class="hidden md:inline">Fokus Nusantara</span>
+            </button>
+            <button id="btn-focus-world" class="bg-slate-800/90 hover:bg-sky-600/30 border border-sky-500/40 text-sky-300 text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition" title="Tampilan Global">
+                <i class="fa-solid fa-globe"></i>
+                <span class="hidden md:inline">Seluruh Dunia</span>
+            </button>
+            <button id="btn-toggle-game" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-md transition">
+                <i class="fa-solid fa-gamepad"></i>
+                <span>Misi Rempah</span>
+            </button>
+            
+            <div class="h-6 w-px bg-slate-700 mx-1"></div>
+
+            <button id="btn-toggle-audio" class="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-amber-400 border border-slate-700 transition" title="Musik Latar">
+                <i class="fa-solid fa-volume-xmark text-sm"></i>
+            </button>
+            <button id="btn-toggle-help" class="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700 transition" title="Petunjuk & Bantuan">
+                <i class="fa-solid fa-circle-question text-sm"></i>
+            </button>
+            <button id="btn-toggle-mobile-menu" class="md:hidden p-2 rounded-lg bg-slate-800 text-amber-400 border border-amber-500/30">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN INTERACTIVE LAYOUT -->
+    <div class="relative z-10 flex-1 flex overflow-hidden pointer-events-none">
+        
+        <!-- LEFT SIDEBAR: ROUTE SELECTION & TIMELINE -->
+        <aside id="left-sidebar" class="pointer-events-auto w-full md:w-80 lg:w-96 glass-panel border-r border-amber-950/40 flex flex-col transition-all duration-300 absolute md:relative inset-y-0 left-0 -translate-x-full md:translate-x-0 z-30">
+            <!-- Tabs Navigation -->
+            <div class="flex border-b border-slate-700/60 bg-slate-900/60">
+                <button id="tab-routes" class="flex-1 py-3 text-xs font-semibold uppercase tracking-wider text-amber-400 border-b-2 border-amber-400 flex justify-center items-center gap-2">
+                    <i class="fa-solid fa-route"></i> Jalur Dagang
+                </button>
+                <button id="tab-timeline" class="flex-1 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200 flex justify-center items-center gap-2">
+                    <i class="fa-solid fa-timeline"></i> Linimasa
+                </button>
+            </div>
+
+            <!-- Tab Content: Routes -->
+            <div id="content-routes" class="flex-1 overflow-y-auto p-4 space-y-3">
+                <div class="text-xs text-slate-400 mb-2 flex items-center justify-between">
+                    <span>Pilih Jalur Perdagangan (Abad 15-17):</span>
+                    <button id="btn-clear-routes" class="text-amber-400 hover:underline text-[11px]">Sembunyikan Semua</button>
+                </div>
+                <!-- Route Cards Injection Area -->
+                <div id="route-cards-container" class="space-y-3"></div>
+            </div>
+
+            <!-- Tab Content: Timeline -->
+            <div id="content-timeline" class="flex-1 overflow-y-auto p-4 space-y-4 hidden">
+                <div class="text-xs text-slate-400 mb-2">Peristiwa Penting Perdagangan & Ekspansi Maritim:</div>
+                <div id="timeline-events-container" class="relative border-l-2 border-amber-600/40 ml-3 space-y-5 pl-4"></div>
+            </div>
+        </aside>
+
+        <!-- RIGHT SIDEBAR: LOCATION DETAILS & COMMODITIES -->
+        <aside id="right-sidebar" class="pointer-events-auto w-full md:w-80 lg:w-96 glass-panel border-l border-amber-950/40 flex flex-col transition-all duration-300 absolute md:relative inset-y-0 right-0 translate-x-full md:translate-x-0 z-30 ml-auto hidden md:flex">
+            <div class="p-3 border-b border-slate-700/60 flex justify-between items-center bg-slate-900/60">
+                <h3 class="font-cinzel text-sm font-bold text-amber-400 flex items-center gap-2">
+                    <i class="fa-solid fa-map-location-dot"></i> Informasi Lokasi
+                </h3>
+                <button id="btn-close-right-sidebar" class="text-slate-400 hover:text-white p-1 md:hidden">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div id="location-detail-content" class="flex-1 overflow-y-auto p-4 space-y-4">
+                <!-- Default State -->
+                <div class="text-center py-12 text-slate-400 space-y-3">
+                    <i class="fa-solid fa-arrow-pointer text-4xl text-amber-500/50 animate-bounce"></i>
+                    <p class="text-sm">Klik marker atau nama lokasi pada globe 3D untuk melihat peranan sejarah dan komoditas rempah.</p>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- BOTTOM CONTROL BAR & PROGRESS SIMULATION -->
+    <div class="relative z-20 glass-panel border-t border-amber-950/40 px-4 py-3 flex flex-col md:flex-row items-center justify-between gap-3">
+        
+        <!-- Live Simulation Status Panel -->
+        <div id="simulation-status-panel" class="w-full md:w-auto flex items-center gap-3 bg-slate-900/80 px-4 py-2 rounded-xl border border-slate-700/60">
+            <div class="w-3 h-3 rounded-full bg-emerald-500 animate-ping"></div>
+            <div class="text-xs">
+                <div class="flex items-center gap-2">
+                    <span id="status-route-name" class="font-bold text-amber-400">Silakan Pilih Jalur Perdagangan</span>
+                    <span id="status-progress-pct" class="bg-amber-500/20 text-amber-300 font-mono text-[11px] px-2 py-0.5 rounded-full">0%</span>
+                </div>
+                <div id="status-current-leg" class="text-slate-400 text-[11px] truncate max-w-xs sm:max-w-md">Kapal bersiap di pelabuhan asal...</div>
+            </div>
+        </div>
+
+        <!-- Simulation Controls -->
+        <div class="flex items-center space-x-2">
+            <button id="btn-sim-play" class="bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 shadow-md transition disabled:opacity-50" disabled>
+                <i class="fa-solid fa-play"></i> Mulai
+            </button>
+            <button id="btn-sim-pause" class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold px-3 py-2 rounded-lg text-xs flex items-center gap-1.5 border border-slate-700 transition disabled:opacity-50" disabled>
+                <i class="fa-solid fa-pause"></i> Jeda
+            </button>
+            <button id="btn-sim-restart" class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold px-3 py-2 rounded-lg text-xs flex items-center gap-1.5 border border-slate-700 transition disabled:opacity-50" disabled title="Ulangi Perjalanan">
+                <i class="fa-solid fa-rotate-left"></i>
+            </button>
+
+            <!-- Speed Control -->
+            <div class="flex items-center bg-slate-900/90 rounded-lg border border-slate-700 p-1 text-xs">
+                <span class="text-[10px] text-slate-400 px-1 font-semibold">Kecepatan:</span>
+                <button class="speed-btn px-2 py-0.5 rounded text-slate-400 hover:text-white" data-speed="0.5">0.5x</button>
+                <button class="speed-btn px-2 py-0.5 rounded bg-amber-600 text-white font-bold" data-speed="1.0">1x</button>
+                <button class="speed-btn px-2 py-0.5 rounded text-slate-400 hover:text-white" data-speed="2.0">2x</button>
+            </div>
+        </div>
+
+        <!-- Map Layer Toggles -->
+        <div class="hidden lg:flex items-center space-x-3 text-xs text-slate-300">
+            <label class="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" id="chk-toggle-labels" checked class="accent-amber-500 rounded">
+                <span>Label Lokasi</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" id="chk-toggle-autorotate" class="accent-amber-500 rounded">
+                <span>Rotasi Otomatis</span>
+            </label>
+        </div>
+    </div>
+
+    <!-- MINI-GAME MODAL CONTAINER -->
+    <div id="game-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md hidden flex items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-xl rounded-2xl p-6 border border-amber-500/50 shadow-2xl relative">
+            <button id="btn-close-game" class="absolute top-4 right-4 text-slate-400 hover:text-white text-lg">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            
+            <div class="flex items-center gap-3 mb-4 border-b border-slate-700 pb-3">
+                <div class="p-3 bg-amber-500/20 text-amber-400 rounded-xl text-xl">
+                    <i class="fa-solid fa-map-location-dot"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold font-cinzel text-amber-400">Misi Kapal Rempah Nusantara</h3>
+                    <p class="text-xs text-slate-300">Uji pemahamanmu tentang lokasi & jalur perdagangan rempah!</p>
+                </div>
+            </div>
+
+            <!-- Game Stats Header -->
+            <div class="flex justify-between items-center bg-slate-900/80 p-3 rounded-xl mb-4 text-xs font-semibold">
+                <span class="text-slate-300">Skor: <span id="game-score" class="text-amber-400 text-sm font-bold">0</span></span>
+                <span class="text-slate-300">Misi: <span id="game-mission-index" class="text-sky-400">1</span> / 3</span>
+            </div>
+
+            <!-- Game Question Area -->
+            <div id="game-content" class="space-y-4">
+                <h4 id="game-question" class="text-sm font-semibold text-white leading-relaxed"></h4>
+                <div id="game-options" class="grid grid-cols-1 gap-2.5"></div>
+                <div id="game-feedback" class="p-3 rounded-lg text-xs hidden"></div>
+            </div>
+
+            <div class="mt-6 flex justify-end">
+                <button id="btn-next-mission" class="bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold px-5 py-2 rounded-lg text-xs hidden">
+                    Misi Selanjutnya <i class="fa-solid fa-arrow-right ml-1"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- HELP MODAL -->
+    <div id="help-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md hidden flex items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-lg rounded-2xl p-6 border border-slate-700 shadow-2xl relative">
+            <button id="btn-close-help" class="absolute top-4 right-4 text-slate-400 hover:text-white text-lg">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <h3 class="text-lg font-bold font-cinzel text-amber-400 mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-circle-info"></i> Petunjuk Penggunaan
+            </h3>
+            <div class="space-y-3 text-xs text-slate-300 leading-relaxed">
+                <div class="flex gap-3 items-start">
+                    <i class="fa-solid fa-rotate text-amber-400 text-base mt-0.5"></i>
+                    <p><strong>Putar & Zoom Globe:</strong> Klik dan seret mouse (atau swipe jari pada HP) untuk memutar globe. Gunakan scroll mouse (atau pinch zoom) untuk memperbesar.</p>
+                </div>
+                <div class="flex gap-3 items-start">
+                    <i class="fa-solid fa-location-dot text-amber-400 text-base mt-0.5"></i>
+                    <p><strong>Informasi Wilayah:</strong> Klik titik marker berwarna atau nama lokasi pada peta 3D untuk melihat komoditas rempah serta sejarahnya.</p>
+                </div>
+                <div class="flex gap-3 items-start">
+                    <i class="fa-solid fa-ship text-amber-400 text-base mt-0.5"></i>
+                    <p><strong>Simulasi Kapal:</strong> Pilih salah satu Jalur Perdagangan di panel kiri, lalu tekan tombol <strong>Mulai</strong> untuk menggerakkan kapal dagang 3D.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN JAVASCRIPT LOGIC -->
+    <script>
+    /**
+     * JARENU - JALUR REMPAH NUSANTARA 3D SIMULATION ENGINE
+     */
+    window.addEventListener('load', () => {
+        // Check Three.js availability
+        if (typeof THREE === 'undefined' || typeof THREE.OrbitControls === 'undefined') {
+            document.getElementById('cdn-error').style.display = 'flex';
+            return;
+        }
+
+        // --- GEOGRAPHIC & HISTORICAL DATA ---
+        const LOCATIONS = [
+            { id: 'maluku', name: 'Kepulauan Maluku', region: 'Nusantara (Indonesia Timur)', lat: -3.14, lon: 128.0, type: 'producer', color: '#f59e0b', desc: 'Pusat rempah cengkih terbesar di dunia. Cengkih menjadi magnet utama yang menarik pedagang dari Asia hingga Eropa.', items: ['Cengkih'] },
+            { id: 'banda', name: 'Kepulauan Banda', region: 'Nusantara (Maluku Selatan)', lat: -4.52, lon: 129.9, type: 'producer', color: '#f59e0b', desc: 'Satu-satunya tempat asal tanaman Pala dan Fuli di dunia pada masa perdagangan kuno.', items: ['Pala', 'Fuli'] },
+            { id: 'ternate', name: 'Ternate', region: 'Nusantara (Maluku Utara)', lat: 0.8, lon: 127.38, type: 'producer', color: '#f59e0b', desc: 'Kerajaan Islam kuat penghasil cengkih utama dan pusat persaingan armada maritim Eropa.', items: ['Cengkih'] },
+            { id: 'tidore', name: 'Tidore', region: 'Nusantara (Maluku Utara)', lat: 0.68, lon: 127.4, type: 'producer', color: '#f59e0b', desc: 'Tetangga sekaligus rival Ternate yang kaya akan komoditas cengkih.', items: ['Cengkih'] },
+            { id: 'malaka', name: 'Selat Malaka', region: 'Asia Tenggara', lat: 2.18, lon: 102.25, type: 'port', color: '#06b6d4', desc: 'Pelabuhan transit internasional terbesar tempat bertemunya saudagar Nusantara, India, Arab, Persia, dan Tiongkok.', items: ['Transit Rempah', 'Sutra', 'Keramik'] },
+            { id: 'aceh', name: 'Kerajaan Aceh', region: 'Sumatera Utara', lat: 5.55, lon: 95.31, type: 'port', color: '#06b6d4', desc: 'Pusat perdagangan lada utama dan benteng pertahanan perdagangan maritim Islam di bagian barat Nusantara.', items: ['Lada', 'Kemenyan'] },
+            { id: 'banten', name: 'Banten', region: 'Jawa Barat', lat: -6.03, lon: 106.15, type: 'port', color: '#06b6d4', desc: 'Pelabuhan lada makmur di Jawa barat. Pelabuhan pertama tempat mendaratnya ekspedisi awal Belanda (Cornelis de Houtman 1596).', items: ['Lada Barat'] },
+            { id: 'gresik', name: 'Gresik / Jawa', region: 'Jawa Timur', lat: -7.15, lon: 112.65, type: 'port', color: '#06b6d4', desc: 'Pelabuhan penting penerima rempah Maluku sebelum didistribusikan ke Asia Barat dan Asia Selatan.', items: ['Beras', 'Rempah Transito'] },
+            { id: 'calicut', name: 'Calicut (Kozhikode)', region: 'India Barat', lat: 11.25, lon: 75.78, type: 'port', color: '#06b6d4', desc: 'Pelabuhan utama India di Samudra Hindia tempat bertukarnya lada India dan rempah Nusantara.', items: ['Lada Hitam', 'Kain Katun'] },
+            { id: 'goa', name: 'Goa', region: 'India Barat', lat: 15.29, lon: 73.9, type: 'european', color: '#ef4444', desc: 'Pusat markas besar ekspansi Portugis di kawasan Samudra Hindia setelah 1510.', items: ['Markas Militer & Dagang'] },
+            { id: 'srilanka', name: 'Sri Lanka (Ceylon)', region: 'Asia Selatan', lat: 6.92, lon: 79.86, type: 'port', color: '#06b6d4', desc: 'Pulau strategis di tengah rute pelayaran maritim Samudra Hindia, terkenal akan komoditas kayu manis.', items: ['Kayu Manis'] },
+            { id: 'hormuz', name: 'Hormuz', region: 'Teluk Persia', lat: 27.06, lon: 56.46, type: 'port', color: '#06b6d4', desc: 'Pintu masuk perdagangan laut menuju Persia dan Jalur Sutra darat.', items: ['Kuda Persia', 'Kain Sutra'] },
+            { id: 'aden', name: 'Aden', region: 'Yaman / Laut Merah', lat: 12.78, lon: 45.01, type: 'port', color: '#06b6d4', desc: 'Pelabuhan kunci pintu Samudra Hindia menuju Laut Merah dan kota Mekkah/Jeddah.', items: ['Minyak Wangi', 'Kurma'] },
+            { id: 'jeddah', name: 'Jeddah', region: 'Jazirah Arab', lat: 21.48, lon: 39.19, type: 'port', color: '#06b6d4', desc: 'Pelabuhan utama pengungkit perdagangan rempah Nusantara menuju Timur Tengah dan Kairo.', items: ['Kemenyan', 'Rempah'] },
+            { id: 'basra', name: 'Basra', region: 'Mesopotamia', lat: 30.5, lon: 47.81, type: 'port', color: '#06b6d4', desc: 'Pelabuhan Teluk Persia yang menghubungkan Nusantara dengan Jalur Sutra darat menuju Eropa.', items: ['Karavan Darat'] },
+            { id: 'guangzhou', name: 'Guangzhou (Canton)', region: 'Tiongkok', lat: 23.12, lon: 113.26, type: 'port', color: '#06b6d4', desc: 'Kota pelabuhan utama Kekaisaran Tiongkok pembeli rempah-rempah tropis Nusantara.', items: ['Keramik', 'Sutra', 'Teh'] },
+            { id: 'quanzhou', name: 'Quanzhou', region: 'Tiongkok', lat: 24.88, lon: 118.67, type: 'port', color: '#06b6d4', desc: 'Pelabuhan kuno Jalur Sutra Laut Tiongkok yang intensif berdagang dengan Nusantara sejak dinasti Song/Ming.', items: ['Porselen'] },
+            { id: 'cape', name: 'Tanjung Harapan', region: 'Afrika Selatan', lat: -34.35, lon: 18.47, type: 'european', color: '#ef4444', desc: 'Ujung selatan benua Afrika yang berhasil diitari Portugis (1488) untuk membuka jalan laut Eropa menuju Samudra Hindia.', items: ['Titik Transit Kapal'] },
+            { id: 'lisboa', name: 'Lisboa (Lisbon)', region: 'Portugal / Eropa', lat: 38.72, lon: -9.13, type: 'european', color: '#ef4444', desc: 'Ibu kota Portugal, titik awal ekspedisi penjelajahan samudra armada Vasco da Gama & Alfonso de Albuquerque.', items: ['Pusat Armada Penjelajah'] },
+            { id: 'amsterdam', name: 'Amsterdam', region: 'Belanda / Eropa', lat: 52.36, lon: 4.9, type: 'european', color: '#ef4444', desc: 'Pusat kongsi dagang VOC (1602) yang memonopoli komoditas rempah Nusantara di Eropa abad ke-17.', items: ['Markas VOC'] }
+        ];
+
+        const TRADE_ROUTES = [
+            {
+                id: 'route-india',
+                name: '1. Jalur Nusantara – India',
+                color: '#10b981', // Green
+                category: 'Asia',
+                waypoints: ['maluku', 'malaka', 'srilanka', 'calicut'],
+                desc: 'Jalur perdagangan kuno maritim yang menghubungkan Maluku dan Selat Malaka dengan pusat rempah India Selatan (Calicut).',
+                historicalContext: 'Pedagang India membawa kain katun dan benang sutra untuk ditukar dengan cengkih dan pala Nusantara.'
+            },
+            {
+                id: 'route-arab',
+                name: '2. Jalur Nusantara – Arab & Persia',
+                color: '#8b5cf6', // Purple
+                category: 'Asia Barat',
+                waypoints: ['maluku', 'malaka', 'calicut', 'hormuz', 'aden', 'jeddah'],
+                desc: 'Melintasi Samudra Hindia menuju Teluk Persia dan Laut Merah, menghubungkan Nusantara dengan dunia Islam.',
+                historicalContext: 'Rempah Nusantara didistribusikan melalui karavan darat dari Basra & Jeddah menuju Mesir dan Eropa.'
+            },
+            {
+                id: 'route-china',
+                name: '3. Jalur Maritim Nusantara – Tiongkok',
+                color: '#06b6d4', // Cyan
+                category: 'Asia Timur',
+                waypoints: ['maluku', 'gresik', 'malaka', 'guangzhou', 'quanzhou'],
+                desc: 'Menghubungkan Kepulauan Nusantara melalui Laut Cina Selatan menuju pelabuhan utama Dinasti Ming.',
+                historicalContext: 'Lada dan kayu cendana Nusantara ditukar dengan porselen dinasti, keramik, dan kain sutra.'
+            },
+            {
+                id: 'route-europe',
+                name: '4. Jalur Penjelajahan Maritim Eropa',
+                color: '#f97316', // Orange
+                category: 'Eropa - Nusantara',
+                waypoints: ['lisboa', 'cape', 'calicut', 'malaka', 'banten', 'maluku'],
+                desc: 'Rute ekspedisi samudra bangsa Eropa (Portugis & Belanda) mengitari Benua Afrika menuju pusat Rempah.',
+                historicalContext: 'Dipopulerkan Vasco da Gama (1498) dan VOC Belanda untuk mencari sumber langsung rempah Nusantara.'
+            }
+        ];
+
+        const TIMELINE_EVENTS = [
+            { year: 'Sebelum Abad 15', title: 'Perdagangan Kuno Asia', desc: 'Jaringan maritim antara Nusantara, India, Tiongkok, dan Arab telah berkembang erat melintasi Samudra Hindia.', locationId: 'malaka' },
+            { year: '1498', title: 'Vasco da Gama Mencapai India', desc: 'Pelaut Portugis berhasil mengitari Tanjung Harapan Afrika dan mendarat di Calicut, India.', locationId: 'calicut' },
+            { year: '1511', title: 'Portugis Merebut Malaka', desc: 'Alfonso de Albuquerque menguasai Selat Malaka untuk mengontrol pintu perdagangan rempah Asia.', locationId: 'malaka' },
+            { year: '1512', title: 'Ekspedisi Portugis ke Maluku', desc: 'Armada Portugis dipimpin Francisco Serrão menjadi bangsa Eropa pertama yang tiba di Banda dan Ternate.', locationId: 'ternate' },
+            { year: '1596', title: 'Belanda Tiba di Banten', desc: 'Cornelis de Houtman memimpin empat kapal Belanda pertama mendarat di Pelabuhan Banten.', locationId: 'banten' },
+            { year: '1602', title: 'Pembentukan VOC', desc: 'Belanda mendirikan Vereenigde Oostindische Compagnie (VOC) untuk memonopoli perdagangan rempah di Nusantara.', locationId: 'amsterdam' }
+        ];
+
+        const MISSIONS = [
+            {
+                id: 1,
+                question: "Sebagai kapten kapal dagang Nusantara, kamu membawa muatan Cengkih segar dari Kepulauan Maluku. Manakah pelabuhan transit terbesar di Selat Malaka tempat bertemunya para saudagar dunia?",
+                options: [
+                    { text: "Pelabuhan Selat Malaka", correct: true, feedback: "Tepat sekali! Selat Malaka adalah pelabuhan transit maritim terpenting di Asia." },
+                    { text: "Pelabuhan Lisboa", correct: false, feedback: "Kurang tepat. Lisboa berada di Eropa (Portugal)." },
+                    { text: "Pelabuhan Cape Town", correct: false, feedback: "Kurang tepat. Tanjung Harapan Afrika hanya tempat transit perbekalan." }
+                ],
+                targetLoc: 'malaka'
+            },
+            {
+                id: 2,
+                question: "Tanaman Pala dan Fuli merupakan rempah paling bernilai tinggi yang hanya tumbuh di satu kepulauan di Nusantara. Lokasi manakah itu?",
+                options: [
+                    { text: "Kepulauan Banda", correct: true, feedback: "Benar! Kepulauan Banda adalah penghasil tunggal Pala dan Fuli pada abad ke-15-17." },
+                    { text: "Sri Lanka", correct: false, feedback: "Kurang tepat. Sri Lanka terkenal sebagai penghasil Kayu Manis." },
+                    { text: "Guangzhou", correct: false, feedback: "Kurang tepat. Guangzhou adalah pelabuhan konsumen di Tiongkok." }
+                ],
+                targetLoc: 'banda'
+            },
+            {
+                id: 3,
+                question: "Jalur maritim manakah yang ditempuh ekspedisi bangsa Portugis dan Belanda dari Eropa menuju Kepulauan Rempah Nusantara?",
+                options: [
+                    { text: "Mengitari Tanjung Harapan (Afrika) -> Samudra Hindia -> Malaka -> Maluku", correct: true, feedback: "Sangat Tepat! Ini adalah rute penjelajahan samudra bangsa Eropa." },
+                    { text: "Melintasi Laut Cina Selatan -> Terusan Suez -> Pasifik", correct: false, feedback: "Salah. Terusan Suez belum ada pada abad ke-15-17!" }
+                ],
+                targetLoc: 'cape'
+            }
+        ];
+
+        // --- GLOBAL STATE ---
+        let scene, camera, renderer, controls;
+        let globeMesh, atmosphereMesh;
+        let activeRouteIndex = null;
+        let activeShipMesh = null;
+        let isSimulating = false;
+        let simProgress = 0; // 0 to 1
+        let simSpeed = 0.0008; // Base speed multiplier
+        let speedFactor = 1.0;
+        let activeRouteCurve = null;
+
+        const locationMarkersMap = new Map();
+        const routeLinesMap = new Map();
+
+        // Audio Engine (Web Audio API Synthesizer - Fallback safe)
+        const AudioEngine = {
+            ctx: null,
+            isMuted: true,
+            init() {
+                try {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                } catch(e) { console.warn("AudioContext unsupported"); }
+            },
+            playTone(freq, type='sine', duration=0.2, vol=0.1) {
+                if (this.isMuted || !this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + duration);
+                } catch(e){}
+            },
+            playClick() { this.playTone(440, 'sine', 0.1, 0.05); },
+            playSuccess() { 
+                this.playTone(523.25, 'triangle', 0.15, 0.08); 
+                setTimeout(()=>this.playTone(659.25, 'triangle', 0.25, 0.08), 100);
+            },
+            playArrive() {
+                this.playTone(392, 'sine', 0.2, 0.05);
+                setTimeout(()=>this.playTone(523.25, 'sine', 0.4, 0.08), 150);
+            }
+        };
+
+        // --- MATH & COORDINATE HELPERS ---
+        const GLOBE_RADIUS = 5;
+
+        // Converts Geographic Lat/Lon to 3D Cartesian Vector3 on Globe Surface
+        function latLonToVector3(lat, lon, radius = GLOBE_RADIUS, height = 0) {
+            const phi = (90 - lat) * (Math.PI / 180);
+            const theta = (lon + 180) * (Math.PI / 180);
+            const r = radius + height;
+            return new THREE.Vector3(
+                -(r * Math.sin(phi) * Math.cos(theta)),
+                r * Math.cos(phi),
+                r * Math.sin(phi) * Math.sin(theta)
+            );
+        }
+
+        // --- PROCEDURAL GLOBE TEXTURE GENERATOR ---
+        // Generates realistic ocean + continent canvas texture (No external image needed)
+        function createProceduralEarthTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 2048;
+            canvas.height = 1024;
+            const ctx = canvas.getContext('2d');
+
+            // 1. Deep Ocean Base Gradient
+            const oceanGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            oceanGrad.addColorStop(0, '#021329');
+            oceanGrad.addColorStop(0.5, '#072448');
+            oceanGrad.addColorStop(1, '#021329');
+            ctx.fillStyle = oceanGrad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Grid lines overlay (latitude/longitude lines for nautical map style)
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.08)';
+            ctx.lineWidth = 1;
+            for(let x=0; x<canvas.width; x+=64) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+            }
+            for(let y=0; y<canvas.height; y+=64) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+            }
+
+            // Helper to draw continent shape in UV coordinates (0-2048, 0-1024)
+            function drawLandmass(points, color = '#154332') {
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                points.forEach((pt, i) => {
+                    const x = ((pt[1] + 180) / 360) * canvas.width;
+                    const y = ((90 - pt[0]) / 180) * canvas.height;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+                ctx.closePath();
+                ctx.fill();
+
+                // Coastal line highlight
+                ctx.strokeStyle = '#2dd4bf';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            }
+
+            // Approximate landmass boundaries for clear recognition
+            // Southeast Asia & Nusantara Archipelago
+            drawLandmass([[6, 95], [20, 100], [22, 108], [10, 108], [1, 104], [-6, 106], [-8, 115], [-8, 126], [-3, 128], [3, 128], [5, 118], [14, 110]], '#1b4d3e');
+            // Sumatra, Java, Borneo, Sulawesi, Maluku, Papua
+            drawLandmass([[5, 95], [3, 98], [-4, 104], [-6, 102], [2, 96]], '#22543d'); // Sumatra
+            drawLandmass([[-6, 105], [-7, 110], [-8, 114], [-7, 115], [-6, 108]], '#22543d'); // Java
+            drawLandmass([[7, 117], [4, 118], [-1, 117], [-4, 111], [1, 109]], '#22543d'); // Borneo
+            drawLandmass([[1, 120], [-5, 120], [-5, 123], [1, 125]], '#22543d'); // Sulawesi
+            drawLandmass([[2, 127], [-4, 126], [-4, 131], [2, 130]], '#d97706'); // Maluku Highlight (Gold Accent)
+            drawLandmass([[-1, 131], [-9, 141], [-5, 141]], '#1b4d3e'); // Papua
+
+            // Asia Continent & India
+            drawLandmass([[70, 60], [70, 170], [40, 120], [22, 120], [20, 108], [10, 78], [25, 65], [40, 50]], '#1e3a2b');
+            drawLandmass([[30, 70], [20, 73], [8, 77], [15, 80], [22, 88], [28, 85]], '#274e37'); // India Peninsula
+
+            // Middle East & Arabia
+            drawLandmass([[30, 32], [13, 43], [15, 53], [25, 57], [30, 48]], '#3b3a24');
+
+            // Africa Continent
+            drawLandmass([[35, -5], [30, 32], [10, 42], [-34, 20], [-34, 18], [5, 9], [15, -17]], '#2c402e');
+
+            // Europe Continent
+            drawLandmass([[70, -10], [70, 40], [45, 40], [36, -5], [43, -9], [58, 5]], '#234735');
+
+            // Australia & New Zealand
+            drawLandmass([[-12, 130], [-14, 142], [-38, 148], [-32, 115]], '#2a382c');
+
+            // Americas (West)
+            drawLandmass([[70, -160], [60, -100], [30, -120], [10, -80], [-50, -70], [-55, -65], [0, -80]], '#1a3325');
+
+            const texture = new THREE.CanvasTexture(canvas);
+            return texture;
+        }
+
+        // --- SCENE INITIALIZATION ---
+        function initScene() {
+            const container = document.getElementById('canvas-container');
+
+            // Scene, Camera, Renderer
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x030712, 0.012);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 6, 14);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            // OrbitControls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 6.5;
+            controls.maxDistance = 25;
+            controls.rotateSpeed = 0.7;
+
+            // Lighting Setup
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+
+            const sunLight = new THREE.DirectionalLight(0xfffbef, 1.2);
+            sunLight.position.set(20, 15, 20);
+            scene.add(sunLight);
+
+            const blueFillLight = new THREE.DirectionalLight(0x38bdf8, 0.4);
+            blueFillLight.position.set(-20, -10, -20);
+            scene.add(blueFillLight);
+
+            // Starfield Background
+            createStarfield();
+
+            // Create Globe
+            createGlobe();
+
+            // Create Location Markers & Canvas Labels
+            createLocationMarkers();
+
+            // Setup Raycasting for Interactions
+            setupRaycaster();
+
+            // Initial Camera Focus to Indonesia / Nusantara
+            focusLocation(LOCATIONS[0].lat, LOCATIONS[0].lon, 10);
+        }
+
+        // --- STARFIELD ---
+        function createStarfield() {
+            const starCount = 1200;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(starCount * 3);
+            for (let i = 0; i < starCount * 3; i += 3) {
+                positions[i] = (Math.random() - 0.5) * 300;
+                positions[i + 1] = (Math.random() - 0.5) * 300;
+                positions[i + 2] = (Math.random() - 0.5) * 300;
+            }
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const material = new THREE.PointsMaterial({ color: 0x94a3b8, size: 0.6, transparent: true, opacity: 0.8 });
+            const starfield = new THREE.Points(geometry, material);
+            scene.add(starfield);
+        }
+
+        // --- GLOBE & ATMOSPHERE ---
+        function createGlobe() {
+            const globeGeo = new THREE.SphereGeometry(GLOBE_RADIUS, 64, 64);
+            const earthTexture = createProceduralEarthTexture();
+
+            const globeMat = new THREE.MeshStandardMaterial({
+                map: earthTexture,
+                roughness: 0.7,
+                metalness: 0.1
+            });
+
+            globeMesh = new THREE.Mesh(globeGeo, globeMat);
+            scene.add(globeMesh);
+
+            // Outer Atmospheric Glow Effect
+            const atmosGeo = new THREE.SphereGeometry(GLOBE_RADIUS * 1.025, 48, 48);
+            const atmosMat = new THREE.MeshBasicMaterial({
+                color: 0x38bdf8,
+                transparent: true,
+                opacity: 0.12,
+                side: THREE.BackSide
+            });
+            atmosphereMesh = new THREE.Mesh(atmosGeo, atmosMat);
+            scene.add(atmosphereMesh);
+        }
+
+        // --- LOCATION MARKERS & HTML LABELS ---
+        function createLocationMarkers() {
+            const markerGroup = new THREE.Group();
+            const labelsContainer = document.getElementById('labels-container');
+
+            LOCATIONS.forEach(loc => {
+                const pos = latLonToVector3(loc.lat, loc.lon, GLOBE_RADIUS, 0.08);
+
+                // 3D Visual Pin Pinpoint
+                const pinGeo = new THREE.SphereGeometry(0.08, 16, 16);
+                const pinMat = new THREE.MeshBasicMaterial({ color: loc.color });
+                const pinMesh = new THREE.Mesh(pinGeo, pinMat);
+                pinMesh.position.copy(pos);
+                pinMesh.userData = loc;
+                markerGroup.add(pinMesh);
+
+                // Vertical Stem Line
+                const stemGeo = new THREE.BufferGeometry().setFromPoints([
+                    latLonToVector3(loc.lat, loc.lon, GLOBE_RADIUS, 0),
+                    pos
+                ]);
+                const stemMat = new THREE.LineBasicMaterial({ color: loc.color, transparent: true, opacity: 0.6 });
+                const stemLine = new THREE.Line(stemGeo, stemMat);
+                markerGroup.add(stemLine);
+
+                // Store in map
+                locationMarkersMap.set(loc.id, { mesh: pinMesh, data: loc, pos: pos });
+
+                // Create HTML Label Overlay
+                const labelDiv = document.createElement('div');
+                labelDiv.className = 'globe-label';
+                labelDiv.dataset.id = loc.id;
+                
+                let iconClass = 'fa-anchor';
+                if(loc.type === 'producer') iconClass = 'fa-seedling';
+                if(loc.type === 'european') iconClass = 'fa-crown';
+
+                labelDiv.innerHTML = `
+                    <div class="badge" style="background-color: rgba(15, 23, 42, 0.85); color: ${loc.color}; border-color: ${loc.color}55;">
+                        <i class="fa-solid ${iconClass}"></i>
+                        <span>${loc.name}</span>
+                    </div>
+                `;
+
+                labelDiv.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    AudioEngine.playClick();
+                    selectLocation(loc);
+                });
+
+                labelsContainer.appendChild(labelDiv);
+                loc.labelElement = labelDiv;
+            });
+
+            scene.add(markerGroup);
+        }
+
+        // Update 2D Screen Coordinates for HTML Labels
+        function updateLabelsPosition() {
+            const tempV = new THREE.Vector3();
+            const showLabels = document.getElementById('chk-toggle-labels').checked;
+
+            LOCATIONS.forEach(loc => {
+                if (!loc.labelElement) return;
+
+                if (!showLabels) {
+                    loc.labelElement.style.display = 'none';
+                    return;
+                }
+
+                tempV.copy(loc.labelElement.worldPos || latLonToVector3(loc.lat, loc.lon, GLOBE_RADIUS, 0.12));
+                
+                // Camera direction check to hide labels behind globe
+                const cameraDir = camera.position.clone().sub(globeMesh.position).normalize();
+                const labelDir = tempV.clone().sub(globeMesh.position).normalize();
+                const dot = cameraDir.dot(labelDir);
+
+                if (dot < 0.15) {
+                    loc.labelElement.style.display = 'none';
+                } else {
+                    tempV.project(camera);
+                    const x = (tempV.x *  .5 + .5) * window.innerWidth;
+                    const y = (tempV.y * -.5 + .5) * window.innerHeight;
+                    
+                    loc.labelElement.style.display = 'block';
+                    loc.labelElement.style.transform = `translate(-50%, -100%) translate(${x}px,${y}px)`;
+                    loc.labelElement.style.opacity = Math.min(1, (dot - 0.15) * 3);
+                }
+            });
+        }
+
+        // --- 3D HISTORICAL MERCHANT SHIP MODEL ---
+        function createMerchantShipMesh() {
+            const shipGroup = new THREE.Group();
+
+            // Hull (Wooden Base)
+            const hullGeo = new THREE.ConeGeometry(0.12, 0.45, 4);
+            const woodMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.8 });
+            const hull = new THREE.Mesh(hullGeo, woodMat);
+            hull.rotation.x = Math.PI / 2;
+            hull.scale.set(1, 1, 0.4);
+            shipGroup.add(hull);
+
+            // Masts
+            const mastGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.35);
+            const mastMat = new THREE.MeshStandardMaterial({ color: 0x451a03 });
+            const mast1 = new THREE.Mesh(mastGeo, mastMat);
+            mast1.position.set(0, 0.15, 0.05);
+            shipGroup.add(mast1);
+
+            // White Canvas Sails
+            const sailGeo = new THREE.PlaneGeometry(0.2, 0.22);
+            const sailMat = new THREE.MeshBasicMaterial({ color: 0xfffbeb, side: THREE.DoubleSide });
+            const sail1 = new THREE.Mesh(sailGeo, sailMat);
+            sail1.position.set(0, 0.18, 0.05);
+            sail1.rotation.y = Math.PI / 2;
+            shipGroup.add(sail1);
+
+            shipGroup.scale.set(1.4, 1.4, 1.4);
+            return shipGroup;
+        }
+
+        // --- TRADE ROUTE CURVES GENERATOR ---
+        function drawTradeRoutes() {
+            TRADE_ROUTES.forEach(route => {
+                const points = [];
+                for(let i = 0; i < route.waypoints.length - 1; i++) {
+                    const startLoc = LOCATIONS.find(l => l.id === route.waypoints[i]);
+                    const endLoc = LOCATIONS.find(l => l.id === route.waypoints[i+1]);
+
+                    if (startLoc && endLoc) {
+                        const vStart = latLonToVector3(startLoc.lat, startLoc.lon, GLOBE_RADIUS, 0.05);
+                        const vEnd = latLonToVector3(endLoc.lat, endLoc.lon, GLOBE_RADIUS, 0.05);
+
+                        // Midpoint elevated curve above surface
+                        const vMid = vStart.clone().add(vEnd).multiplyScalar(0.5);
+                        const dist = vStart.distanceTo(vEnd);
+                        vMid.normalize().multiplyScalar(GLOBE_RADIUS + Math.min(1.2, dist * 0.18));
+
+                        const curve = new THREE.QuadraticBezierCurve3(vStart, vMid, vEnd);
+                        const curvePoints = curve.getPoints(30);
+                        points.push(...curvePoints);
+                    }
+                }
+
+                // Render Route Line
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const material = new THREE.LineBasicMaterial({
+                    color: route.color,
+                    linewidth: 3,
+                    transparent: true,
+                    opacity: 0.35
+                });
+                const line = new THREE.Line(geometry, material);
+                scene.add(line);
+
+                routeLinesMap.set(route.id, { line: line, fullPoints: points });
+            });
+        }
+
+        // --- RAYCASTER FOR 3D CLICK DETECTION ---
+        function setupRaycaster() {
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2();
+
+            window.addEventListener('pointerdown', (e) => {
+                // Ignore click if clicking sidebar UI
+                if (e.target.closest('#left-sidebar') || e.target.closest('#right-sidebar') || e.target.closest('header') || e.target.closest('.glass-panel')) return;
+
+                mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+                raycaster.setFromCamera(mouse, camera);
+                const meshes = Array.from(locationMarkersMap.values()).map(item => item.mesh);
+                const intersects = raycaster.intersectObjects(meshes);
+
+                if (intersects.length > 0) {
+                    const selectedData = intersects[0].object.userData;
+                    AudioEngine.playClick();
+                    selectLocation(selectedData);
+                }
+            });
+        }
+
+        // --- CAMERA ANIMATION / FOCUS HELPER ---
+        function focusLocation(lat, lon, distance = 9.5) {
+            const targetPos = latLonToVector3(lat, lon, distance);
+            
+            const startPos = camera.position.clone();
+            const startTime = performance.now();
+            const duration = 1200;
+
+            function animateCamera(now) {
+                const elapsed = now - startTime;
+                const progress = Math.min(1, elapsed / duration);
+                const ease = 1 - Math.pow(1 - progress, 3); // Ease Out Cubic
+
+                camera.position.lerpVectors(startPos, targetPos, ease);
+                controls.update();
+
+                if (progress < 1) {
+                    requestAnimationFrame(animateCamera);
+                }
+            }
+            requestAnimationFrame(animateCamera);
+        }
+
+        // --- SELECTION LOGIC ---
+        function selectLocation(loc) {
+            focusLocation(loc.lat, loc.lon, 8.5);
+
+            const rightSidebar = document.getElementById('right-sidebar');
+            const contentContainer = document.getElementById('location-detail-content');
+            rightSidebar.classList.remove('hidden');
+
+            let itemsTags = loc.items.map(item => `<span class="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] px-2 py-0.5 rounded-md font-medium">${item}</span>`).join(' ');
+
+            contentContainer.innerHTML = `
+                <div class="space-y-4 animate-fadeIn">
+                    <div class="border-b border-slate-700/80 pb-3">
+                        <span class="text-[10px] uppercase font-bold tracking-wider text-amber-400/90">${loc.region}</span>
+                        <h2 class="text-xl font-bold font-cinzel text-white mt-0.5">${loc.name}</h2>
+                    </div>
+
+                    <div>
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Komoditas Utama:</h4>
+                        <div class="flex flex-wrap gap-1.5">${itemsTags}</div>
+                    </div>
+
+                    <div class="bg-slate-900/80 p-3.5 rounded-xl border border-slate-700/60 text-xs text-slate-300 leading-relaxed">
+                        <h4 class="text-amber-400 font-semibold mb-1 flex items-center gap-1.5">
+                            <i class="fa-solid fa-book-bookmark"></i> Peran Sejarah Rempah:
+                        </h4>
+                        <p>${loc.desc}</p>
+                    </div>
+
+                    <div class="pt-2 flex flex-col gap-2">
+                        <button onclick="window.jarenuApp.focusLoc('${loc.id}')" class="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-2 transition">
+                            <i class="fa-solid fa-crosshairs"></i> Fokus Kamera
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function selectRoute(routeId) {
+            const routeIndex = TRADE_ROUTES.findIndex(r => r.id === routeId);
+            if (routeIndex === -1) return;
+
+            activeRouteIndex = routeIndex;
+            const route = TRADE_ROUTES[routeIndex];
+
+            // Highlight Active Route Line
+            routeLinesMap.forEach((val, id) => {
+                if (id === routeId) {
+                    val.line.material.opacity = 0.95;
+                    val.line.material.linewidth = 4;
+                } else {
+                    val.line.material.opacity = 0.15;
+                    val.line.material.linewidth = 1;
+                }
+            });
+
+            // Re-render Active Route UI Cards
+            renderRouteCards();
+
+            // Prepare Curve for Ship Animation
+            const routeData = routeLinesMap.get(routeId);
+            if (routeData) {
+                activeRouteCurve = new THREE.CatmullRomCurve3(routeData.fullPoints);
+            }
+
+            // Create Ship if not exists
+            if (!activeShipMesh) {
+                activeShipMesh = createMerchantShipMesh();
+                scene.add(activeShipMesh);
+            }
+
+            // Reset Simulation State
+            simProgress = 0;
+            updateShipPosition();
+
+            // Update Status UI
+            document.getElementById('status-route-name').textContent = route.name;
+            document.getElementById('status-progress-pct').textContent = '0%';
+            document.getElementById('status-current-leg').textContent = `Persiapan berlayar dari ${LOCATIONS.find(l=>l.id===route.waypoints[0]).name}`;
+            
+            // Enable Control Buttons
+            document.getElementById('btn-sim-play').disabled = false;
+            document.getElementById('btn-sim-pause').disabled = false;
+            document.getElementById('btn-sim-restart').disabled = false;
+
+            // Focus Camera on Route Origin
+            const originLoc = LOCATIONS.find(l => l.id === route.waypoints[0]);
+            if (originLoc) focusLocation(originLoc.lat, originLoc.lon, 9);
+
+            AudioEngine.playClick();
+        }
+
+        function updateShipPosition() {
+            if (!activeShipMesh || !activeRouteCurve) return;
+
+            const point = activeRouteCurve.getPointAt(simProgress);
+            const tangent = activeRouteCurve.getTangentAt(simProgress);
+
+            activeShipMesh.position.copy(point);
+
+            // Orient Ship along Route Tangent Curve & Normal to Globe Surface
+            const normal = point.clone().normalize();
+            const lookAtTarget = point.clone().add(tangent);
+            activeShipMesh.lookAt(lookAtTarget);
+
+            // Correct Up vector to match Globe Surface Normal
+            activeShipMesh.up.copy(normal);
+
+            // Update Live UI Progress Panel
+            const pct = Math.floor(simProgress * 100);
+            document.getElementById('status-progress-pct').textContent = `${pct}%`;
+
+            if (activeRouteIndex !== null) {
+                const route = TRADE_ROUTES[activeRouteIndex];
+                const totalLegs = route.waypoints.length - 1;
+                const currentLegIdx = Math.min(totalLegs - 1, Math.floor(simProgress * totalLegs));
+                const fromLoc = LOCATIONS.find(l => l.id === route.waypoints[currentLegIdx]);
+                const toLoc = LOCATIONS.find(l => l.id === route.waypoints[currentLegIdx + 1]);
+
+                if (fromLoc && toLoc) {
+                    document.getElementById('status-current-leg').textContent = `Melintasi: ${fromLoc.name} ➔ ${toLoc.name}`;
+                }
+            }
+        }
+
+        // --- RENDER SIDEBAR UI CARDS ---
+        function renderRouteCards() {
+            const container = document.getElementById('route-cards-container');
+            container.innerHTML = '';
+
+            TRADE_ROUTES.forEach((route, idx) => {
+                const isActive = activeRouteIndex === idx;
+                const card = document.createElement('div');
+                card.className = `glass-card p-3.5 rounded-xl cursor-pointer ${isActive ? 'active-route-card' : ''}`;
+                
+                card.innerHTML = `
+                    <div class="flex items-center justify-between mb-1.5">
+                        <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded" style="background:${route.color}22; color:${route.color}; border:1px solid ${route.color}55;">
+                            ${route.category}
+                        </span>
+                        <i class="fa-solid fa-chevron-right text-xs text-slate-500"></i>
+                    </div>
+                    <h3 class="text-sm font-bold text-white mb-1">${route.name}</h3>
+                    <p class="text-xs text-slate-300 leading-snug mb-2">${route.desc}</p>
+                    <div class="text-[11px] text-slate-400 italic bg-slate-900/50 p-2 rounded">
+                        "${route.historicalContext}"
+                    </div>
+                `;
+
+                card.addEventListener('click', () => selectRoute(route.id));
+                container.appendChild(card);
+            });
+        }
+
+        function renderTimelineEvents() {
+            const container = document.getElementById('timeline-events-container');
+            container.innerHTML = '';
+
+            TIMELINE_EVENTS.forEach(ev => {
+                const item = document.createElement('div');
+                item.className = 'relative group cursor-pointer';
+                item.innerHTML = `
+                    <div class="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-amber-500 border-2 border-slate-900 group-hover:scale-125 transition"></div>
+                    <div class="text-xs font-bold text-amber-400">${ev.year}</div>
+                    <div class="text-sm font-semibold text-white mt-0.5">${ev.title}</div>
+                    <div class="text-xs text-slate-300 mt-1 leading-relaxed">${ev.desc}</div>
+                `;
+                item.addEventListener('click', () => {
+                    const loc = LOCATIONS.find(l => l.id === ev.locationId);
+                    if (loc) {
+                        AudioEngine.playClick();
+                        selectLocation(loc);
+                    }
+                });
+                container.appendChild(item);
+            });
+        }
+
+        // --- MINI-GAME EDUKASI ---
+        let currentMissionIndex = 0;
+        let gameScore = 0;
+
+        function openMiniGame() {
+            currentMissionIndex = 0;
+            gameScore = 0;
+            document.getElementById('game-score').textContent = '0';
+            document.getElementById('game-modal').classList.remove('hidden');
+            loadMission(0);
+        }
+
+        function loadMission(idx) {
+            const mission = MISSIONS[idx];
+            if (!mission) return;
+
+            document.getElementById('game-mission-index').textContent = idx + 1;
+            document.getElementById('game-question').textContent = mission.question;
+            
+            const optionsContainer = document.getElementById('game-options');
+            optionsContainer.innerHTML = '';
+            
+            const feedbackDiv = document.getElementById('game-feedback');
+            feedbackDiv.classList.add('hidden');
+            document.getElementById('btn-next-mission').classList.add('hidden');
+
+            mission.options.forEach((opt) => {
+                const btn = document.createElement('button');
+                btn.className = 'w-full text-left p-3 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-xs text-slate-200 transition flex items-center justify-between';
+                btn.innerHTML = `<span>${opt.text}</span> <i class="fa-regular fa-circle text-slate-500"></i>`;
+                
+                btn.addEventListener('click', () => {
+                    // Disable all options
+                    const allBtns = optionsContainer.querySelectorAll('button');
+                    allBtns.forEach(b => b.disabled = true);
+
+                    if (opt.correct) {
+                        btn.className = 'w-full text-left p-3 rounded-xl bg-emerald-950/80 border border-emerald-500 text-xs text-emerald-200 font-semibold';
+                        feedbackDiv.className = 'p-3 rounded-lg text-xs bg-emerald-900/50 border border-emerald-500 text-emerald-200';
+                        feedbackDiv.textContent = opt.feedback;
+                        gameScore += 100;
+                        document.getElementById('game-score').textContent = gameScore;
+                        AudioEngine.playSuccess();
+                    } else {
+                        btn.className = 'w-full text-left p-3 rounded-xl bg-rose-950/80 border border-rose-500 text-xs text-rose-200 font-semibold';
+                        feedbackDiv.className = 'p-3 rounded-lg text-xs bg-rose-900/50 border border-rose-500 text-rose-200';
+                        feedbackDiv.textContent = opt.feedback;
+                    }
+                    feedbackDiv.classList.remove('hidden');
+
+                    // Focus Camera on Mission Target Location
+                    const targetLoc = LOCATIONS.find(l => l.id === mission.targetLoc);
+                    if(targetLoc) focusLocation(targetLoc.lat, targetLoc.lon, 8.5);
+
+                    // Show Next Button
+                    if (idx < MISSIONS.length - 1) {
+                        document.getElementById('btn-next-mission').classList.remove('hidden');
+                    }
+                });
+
+                optionsContainer.appendChild(btn);
+            });
+        }
+
+        // --- EVENT BINDINGS & LISTENERS ---
+        function setupEventListeners() {
+            // Sidebar Navigation Tabs
+            const tabRoutes = document.getElementById('tab-routes');
+            const tabTimeline = document.getElementById('tab-timeline');
+            const contentRoutes = document.getElementById('content-routes');
+            const contentTimeline = document.getElementById('content-timeline');
+
+            tabRoutes.addEventListener('click', () => {
+                tabRoutes.className = 'flex-1 py-3 text-xs font-semibold uppercase tracking-wider text-amber-400 border-b-2 border-amber-400 flex justify-center items-center gap-2';
+                tabTimeline.className = 'flex-1 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200 flex justify-center items-center gap-2';
+                contentRoutes.classList.remove('hidden');
+                contentTimeline.classList.add('hidden');
+            });
+
+            tabTimeline.addEventListener('click', () => {
+                tabTimeline.className = 'flex-1 py-3 text-xs font-semibold uppercase tracking-wider text-amber-400 border-b-2 border-amber-400 flex justify-center items-center gap-2';
+                tabRoutes.className = 'flex-1 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200 flex justify-center items-center gap-2';
+                contentTimeline.classList.remove('hidden');
+                contentRoutes.classList.add('hidden');
+            });
+
+            // Camera Focus Buttons
+            document.getElementById('btn-focus-nusantara').addEventListener('click', () => {
+                focusLocation(LOCATIONS[0].lat, LOCATIONS[0].lon, 9.5);
+                AudioEngine.playClick();
+            });
+
+            document.getElementById('btn-focus-world').addEventListener('click', () => {
+                focusLocation(10, 80, 18);
+                AudioEngine.playClick();
+            });
+
+            // Simulation Controls
+            document.getElementById('btn-sim-play').addEventListener('click', () => {
+                isSimulating = true;
+                AudioEngine.playClick();
+            });
+
+            document.getElementById('btn-sim-pause').addEventListener('click', () => {
+                isSimulating = false;
+                AudioEngine.playClick();
+            });
+
+            document.getElementById('btn-sim-restart').addEventListener('click', () => {
+                simProgress = 0;
+                isSimulating = true;
+                updateShipPosition();
+                AudioEngine.playClick();
+            });
+
+            // Speed Control Buttons
+            document.querySelectorAll('.speed-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.speed-btn').forEach(b => {
+                        b.className = 'speed-btn px-2 py-0.5 rounded text-slate-400 hover:text-white';
+                    });
+                    btn.className = 'speed-btn px-2 py-0.5 rounded bg-amber-600 text-white font-bold';
+                    speedFactor = parseFloat(btn.dataset.speed);
+                    AudioEngine.playClick();
+                });
+            });
+
+            // Clear Routes Button
+            document.getElementById('btn-clear-routes').addEventListener('click', () => {
+                activeRouteIndex = null;
+                routeLinesMap.forEach(val => {
+                    val.line.material.opacity = 0.35;
+                    val.line.material.linewidth = 2;
+                });
+                renderRouteCards();
+                if (activeShipMesh) activeShipMesh.visible = false;
+                document.getElementById('status-route-name').textContent = 'Silakan Pilih Jalur Perdagangan';
+                document.getElementById('status-progress-pct').textContent = '0%';
+                document.getElementById('btn-sim-play').disabled = true;
+                document.getElementById('btn-sim-pause').disabled = true;
+                document.getElementById('btn-sim-restart').disabled = true;
+                isSimulating = false;
+            });
+
+            // Audio & Help Modals
+            document.getElementById('btn-toggle-audio').addEventListener('click', (e) => {
+                AudioEngine.init();
+                AudioEngine.isMuted = !AudioEngine.isMuted;
+                const icon = e.currentTarget.querySelector('i');
+                if (AudioEngine.isMuted) {
+                    icon.className = 'fa-solid fa-volume-xmark text-sm';
+                    e.currentTarget.classList.remove('text-amber-400');
+                } else {
+                    icon.className = 'fa-solid fa-volume-high text-sm';
+                    e.currentTarget.classList.add('text-amber-400');
+                    AudioEngine.playClick();
+                }
+            });
+
+            document.getElementById('btn-toggle-game').addEventListener('click', openMiniGame);
+            document.getElementById('btn-close-game').addEventListener('click', () => document.getElementById('game-modal').classList.add('hidden'));
+            document.getElementById('btn-next-mission').addEventListener('click', () => {
+                currentMissionIndex++;
+                loadMission(currentMissionIndex);
+            });
+
+            document.getElementById('btn-toggle-help').addEventListener('click', () => document.getElementById('help-modal').classList.remove('hidden'));
+            document.getElementById('btn-close-help').addEventListener('click', () => document.getElementById('help-modal').classList.add('hidden'));
+
+            // Mobile Menu Drawer Toggle
+            const leftSidebar = document.getElementById('left-sidebar');
+            document.getElementById('btn-toggle-mobile-menu').addEventListener('click', () => {
+                leftSidebar.classList.toggle('-translate-x-full');
+            });
+            document.getElementById('btn-close-right-sidebar').addEventListener('click', () => {
+                document.getElementById('right-sidebar').classList.add('hidden');
+            });
+
+            // Window Resize Handler
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // --- MAIN ANIMATION LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Controls Update
+            controls.update();
+
+            // Auto-rotate globe if checked
+            const isAutoRotate = document.getElementById('chk-toggle-autorotate').checked;
+            if (isAutoRotate && globeMesh) {
+                globeMesh.rotation.y += 0.001;
+            }
+
+            // Ship Movement Simulation Update
+            if (isSimulating && activeRouteCurve) {
+                simProgress += simSpeed * speedFactor;
+                if (simProgress >= 1) {
+                    simProgress = 1;
+                    isSimulating = false;
+                    AudioEngine.playArrive();
+                    document.getElementById('status-current-leg').textContent = 'Perjalanan perdagangan telah sampai di pelabuhan tujuan!';
+                }
+                updateShipPosition();
+                if(activeShipMesh) activeShipMesh.visible = true;
+            }
+
+            // Update HTML 2D Labels on 3D Globe
+            updateLabelsPosition();
+
+            // Render 3D Scene
+            renderer.render(scene, camera);
+        }
+
+        // --- EXPOSE GLOBAL APP HELPER ---
+        window.jarenuApp = {
+            focusLoc: (locId) => {
+                const loc = LOCATIONS.find(l => l.id === locId);
+                if (loc) focusLocation(loc.lat, loc.lon, 8.5);
+            }
+        };
+
+        // --- APPLICATION STARTUP ---
+        initScene();
+        drawTradeRoutes();
+        renderRouteCards();
+        renderTimelineEvents();
+        setupEventListeners();
+        animate();
+    });
+    </script>
+</body>
+</html>
